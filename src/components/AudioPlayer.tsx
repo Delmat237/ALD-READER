@@ -1,14 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Animated, PanResponder, Dimensions,
+  Animated, PanResponder,
 } from 'react-native';
 import { usePlayerStore } from '../store/playerStore';
 import { Radius, Spacing, useAppTheme } from '../theme';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-const TRACK_H_MARGIN = (Spacing.lg + Spacing.md) * 2; // padding from AudioPlayer container + player area
-const BAR_W = SCREEN_W - TRACK_H_MARGIN - 32;
 
 // Wave bars heights (varied for natural look)
 const BAR_TARGETS = [14, 20, 16, 22, 12];
@@ -21,6 +17,8 @@ export default function AudioPlayer() {
   // dragRatio: position visuelle pendant le glissement (null = pas de glissement)
   const [dragRatio, setDragRatio] = useState<number | null>(null);
   const progress = dragRatio !== null ? dragRatio : store.getProgress();
+  // Measured width of the progress track (updated onLayout, avoids static Dimensions)
+  const trackWidthRef = useRef(200);
 
   // One Animated.Value per bar (animate height for proper bottom-aligned look)
   const barAnims = useRef(BAR_TARGETS.map(() => new Animated.Value(4))).current;
@@ -68,16 +66,14 @@ export default function AudioPlayer() {
 
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    // Mise à jour visuelle en temps réel pendant le glissement
     onPanResponderGrant: (e) => {
-      setDragRatio(Math.max(0, Math.min(1, e.nativeEvent.locationX / BAR_W)));
+      setDragRatio(Math.max(0, Math.min(1, e.nativeEvent.locationX / trackWidthRef.current)));
     },
     onPanResponderMove: (e) => {
-      setDragRatio(Math.max(0, Math.min(1, e.nativeEvent.locationX / BAR_W)));
+      setDragRatio(Math.max(0, Math.min(1, e.nativeEvent.locationX / trackWidthRef.current)));
     },
-    // Seek TTS uniquement à la fin du glissement (un seul appel)
     onPanResponderRelease: (e) => {
-      const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / BAR_W));
+      const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / trackWidthRef.current));
       setDragRatio(null);
       store.seekToProgress(ratio);
     },
@@ -122,8 +118,11 @@ export default function AudioPlayer() {
 
       {/* Progress bar */}
       <View style={styles.progressTrack} {...panResponder.panHandlers}>
-        <View style={[styles.progressBg, { backgroundColor: colors.white10 }]}>
-          <View style={[styles.progressFill, { width: BAR_W * progress, backgroundColor: colors.accent }]}>
+        <View
+          style={[styles.progressBg, { backgroundColor: colors.white10 }]}
+          onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+        >
+          <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: colors.accent }]}>
             <View style={[styles.progressThumb, { backgroundColor: colors.white, shadowColor: colors.accent }]} />
           </View>
         </View>

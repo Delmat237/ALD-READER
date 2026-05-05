@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, memo, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, StatusBar, FlatList, Dimensions,
+  StyleSheet, StatusBar, FlatList, useWindowDimensions,
 } from 'react-native';
 import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,8 +10,6 @@ import AudioPlayer from '../../src/components/AudioPlayer';
 import SettingsSheet from '../../src/components/SettingsSheet';
 import { Radius, Spacing, useAppTheme } from '../../src/theme';
 import { splitIntoSpeechChunks } from '../../src/utils/text';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 // Memoize PageCard for performance
 const MemoPageCard = memo(PageCard);
@@ -23,6 +21,7 @@ export default function ReaderScreen() {
   const flatListRef = React.useRef<FlatList>(null);
   const colors = useAppTheme();
   const theme = store.settings.theme;
+  const { width: screenW } = useWindowDimensions();
 
   // Safe scroll to index
   useEffect(() => {
@@ -47,9 +46,10 @@ export default function ReaderScreen() {
       highlightIndex={index === store.currentPageIndex ? store.currentChunkIndex : -1}
       isRTL={store.settings.language.rtl === true}
       colors={colors}
+      width={screenW}
       onChunkPress={(chunkIdx: number) => store.jumpToChunk(chunkIdx)}
     />
-  ), [store.pages.length, store.currentPageIndex, store.currentChunkIndex, store.settings.language.rtl, colors]);
+  ), [store.pages.length, store.currentPageIndex, store.currentChunkIndex, store.settings.language.rtl, colors, screenW]);
 
   if (!store.currentDoc) {
     return (
@@ -125,8 +125,8 @@ export default function ReaderScreen() {
         }}
         initialScrollIndex={store.currentPageIndex >= store.pages.length ? 0 : store.currentPageIndex}
         getItemLayout={(_, index) => ({
-          length: SCREEN_W,
-          offset: SCREEN_W * index,
+          length: screenW,
+          offset: screenW * index,
           index,
         })}
         // Performance optimizations
@@ -153,6 +153,7 @@ function PageCard({
   highlightIndex,
   isRTL,
   colors,
+  width,
   onChunkPress
 }: {
   text: string;
@@ -161,6 +162,7 @@ function PageCard({
   highlightIndex: number;
   isRTL: boolean;
   colors: any;
+  width: number;
   onChunkPress: (idx: number) => void;
 }) {
   const scrollRef = React.useRef<ScrollView>(null);
@@ -177,7 +179,7 @@ function PageCard({
   }, [highlightIndex]);
 
   return (
-    <View style={styles.pageCard}>
+    <View style={[styles.pageCard, { width }]}>
       {/* Page tag */}
       <View style={[styles.pageTag, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.pageTagText, { color: colors.white60 }]}>
@@ -301,9 +303,7 @@ const styles = StyleSheet.create({
 
   pager: { flex: 1 },
 
-  // Page card — uses SCREEN_W for correct pagingEnabled behavior
   pageCard: {
-    width: SCREEN_W,
     flex: 1,
     paddingHorizontal: Spacing.xl,
   },

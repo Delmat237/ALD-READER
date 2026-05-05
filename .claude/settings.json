@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('codegenConfig:', d.get\\('codegenConfig', 'none'\\)\\); print\\('nativePackage:', d.get\\('main', 'none'\\)\\)\")"
     ]
   }
 }
