@@ -4,7 +4,7 @@
     "slug": "docuvoice",
     "version": "1.0.0",
     "orientation": "portrait",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "splash": {
@@ -25,7 +25,6 @@
     },
     "android": {
       "package": "com.docuvoice.app",
-      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f0f14"
@@ -49,19 +48,21 @@
           "iCloudContainerEnvironment": "Production"
         }
       ]
+
+
     ],
     "scheme": "docuvoice",
+    "updates": {
+      "url": "https://u.expo.dev/d8bc2ddf-eb8f-45a6-b135-b9fae54bac5f",
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": "1.0.0",
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "d8bc2ddf-eb8f-45a6-b135-b9fae54bac5f"
       }
     },
-    "owner": "votre-compte-expo",
-    "updates": {
-      "url": "https://u.expo.dev/your-project-id"
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    }
+    "owner": "delmat237"
   }
 }

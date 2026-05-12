@@ -343,14 +343,25 @@ function cleanText(text: string): string {
 function isGarbageText(text: string): boolean {
   if (!text || text.length < 50) return false;
 
-  // Autorise : ASCII imprimable + Latin étendu (fr/es/de/pt/it/pl…) + Cyrillique
-  // + CJK + Hiragana/Katakana + Hangul + Arabe + Devanagari + ponctuation Unicode courante
-  const allowed = /[a-zA-Z0-9\s.,!?;:()\-'"«»À-ɏЀ-ӿ؀-ۿऀ-ॿ一-鿿぀-ヿ가-힯‘-‟…–—]/;
+  // Check 1: caractères hors plages Unicode reconnues
+  const allowed = /[a-zA-Z0-9\s.,!?;:()\-’"«»À-ɏЀ-ӿ؀-ۿऀ-ॿ一-鿿぀-ヿ가-힯’-‟…–—]/;
   let specialCount = 0;
   for (const ch of text) {
     if (!allowed.test(ch)) specialCount++;
   }
-  return specialCount / text.length > 0.25;
+  if (specialCount / text.length > 0.25) return true;
+
+  // Check 2: densité anormalement élevée de caractères Latin non-ASCII (U+0080–U+024F).
+  // Les PDFs avec polices personnalisées remappent les octets vers cette plage → ~50 % du texte.
+  // Du vrai texte français n’en contient que ~5–15 %.
+  let nonAsciiLatinCount = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code > 127 && code < 0x0250) nonAsciiLatinCount++;
+  }
+  if (nonAsciiLatinCount / text.length > 0.30) return true;
+
+  return false;
 }
 
 function splitIntoChunks(text: string, maxLen = 1500): string[] {
