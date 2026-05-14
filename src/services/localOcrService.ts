@@ -23,7 +23,18 @@ export async function extractTextFromScannedPdf(
   language: AppLanguage
 ): Promise<string[]> {
   // 1. Convertir chaque page du PDF en image PNG (API système Android/iOS)
-  const { outputFiles } = await convert(uri);
+  let outputFiles: string[] = [];
+  try {
+    const result = await convert(uri);
+    outputFiles = result.outputFiles ?? [];
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    console.error('react-native-pdf-to-image convert failed:', e);
+    throw new Error(
+      `Impossible de convertir le PDF en images (${m}). ` +
+        'Vérifiez que le fichier est un PDF valide et qu’il n’est pas protégé.'
+    );
+  }
   if (!outputFiles || outputFiles.length === 0) {
     return ["Ce PDF n'a pu être converti en images. Il est peut-être corrompu ou protégé."];
   }

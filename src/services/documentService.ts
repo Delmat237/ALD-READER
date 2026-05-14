@@ -28,21 +28,58 @@ async function extractTxt(uri: string): Promise<string[]> {
   return splitIntoChunks(cleanText(content));
 }
 
-async function extractPdf(uri: string, settings: PlayerSettings): Promise<string[]> {
-  try {
-    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+/** Au-delà de ce poids, lire tout le PDF en base64 en JS risque de faire planter l’app (OOM). On passe direct à l’OCR. */
+const MAX_PDF_BYTES_FOR_EMBEDDED_PARSE = 1.5 * 1024 * 1024;
 
-    // 1. Extraction directe du texte embarqué (rapide, 100 % hors-ligne)
-    const localText = base64PdfToText(base64);
-    if (localText.trim().length > 100 && !isGarbageText(localText)) {
+async function extractPdf(uri: string, settings: PlayerSettings): Promise<string[]> {
+  const ocrFallback = () => extractTextFromScannedPdf(uri, settings.language);
+
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists) {
+      return [
+        "Fichier introuvable à l’emplacement enregistré.\n\n" +
+          "Réimportez le document (le cache peut avoir été vidé après une mise à jour ou un redémarrage).",
+      ];
+    }
+
+    const sizeBytes = typeof info.size === "number" ? info.size : 0;
+    let localText = "";
+
+    const skipEmbeddedRead =
+      typeof info.size === "number" && info.size > MAX_PDF_BYTES_FOR_EMBEDDED_PARSE;
+
+    // 1. Extraction embarquée : évite readAsStringAsync(base64) sur gros PDF → OOM / crash
+    if (skipEmbeddedRead) {
+      console.warn(
+        `PDF: taille ${info.size} octets > seuil embarqué, OCR direct (évite crash mémoire sur base64).`
+      );
+    } else {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+        localText = base64PdfToText(base64);
+      } catch (embeddedErr) {
+        console.warn("PDF: lecture ou parsing embarqué impossible, passage à l’OCR:", embeddedErr);
+      }
+    }
+
+    if (embeddedPdfTextIsUsable(localText)) {
       return splitIntoChunks(cleanText(localText));
     }
 
-    // 2. PDF scanné détecté → OCR on-device via ML Kit (hors-ligne, aucune clé API)
-    return await extractTextFromScannedPdf(uri, settings.language);
-  } catch (err) {
-    console.error('PDF extraction error:', err);
-    return ["Ce PDF n'a pas pu être lu. Il est peut-être corrompu ou protégé."];
+    // 2. Pas de texte embarqué fiable → OCR (ML Kit + conversion page → image)
+    return await ocrFallback();
+  } catch (err: unknown) {
+    console.error("PDF extraction error:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    const hint =
+      msg.length > 0 && msg.length < 220
+        ? `\n\nDétail technique : ${msg}`
+        : "";
+    return [
+      "Ce PDF n'a pas pu être lu. Il est peut-être corrompu, protégé ou dans un format non pris en charge par la conversion." +
+        hint,
+    ];
   }
 }
 
@@ -198,17 +235,9 @@ function base64PdfToText(base64: string): string {
     }
 
     if (allTextBlocks.length === 0) {
-      // Last resort: direct string search in binary
-      const fallbackRegex = /\(([^)]{5,})\)/g;
-      let fMatch;
-      const fragments = [];
-      while ((fMatch = fallbackRegex.exec(binary)) !== null) {
-        const decoded = decodePdfString(fMatch[1]);
-        if (decoded.length > 10 && !decoded.includes('/') && !decoded.includes('\\')) {
-          fragments.push(decoded);
-        }
-      }
-      return fragments.join(' ');
+      // Pas de fallback sur le binaire : les chaînes "(...)" hors BT/ET sont
+      // presque toujours métadonnées / polices / bruit → forcer l’OCR en aval.
+      return '';
     }
 
     // Sort blocks by Y (desc) then X (asc)
@@ -337,29 +366,67 @@ function cleanText(text: string): string {
  */
 
 /**
- * Détecte si un texte est du "charabia" (Mojibake/Encodage corrompu).
- * Analyse le ratio de caractères spéciaux par rapport aux caractères alphanumériques.
+ * Texte embarqué PDF jugé exploitable sans OCR (seuil plus strict qu’avant).
+ */
+function embeddedPdfTextIsUsable(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 120) return false;
+  if (isGarbageText(t)) return false;
+
+  // Prose lisible : assez de « mots » séparés par des espaces (évite un seul bloc compact)
+  if (t.length >= 350) {
+    const words = t.split(/\s+/).filter((w) => w.length > 1);
+    if (words.length < Math.max(8, Math.floor(t.length / 90))) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Détecte si un texte est du "charabia" (Mojibake/Encodage corrompu / glyphes mal mappés).
  */
 function isGarbageText(text: string): boolean {
   if (!text || text.length < 50) return false;
 
-  // Check 1: caractères hors plages Unicode reconnues
+  // Check 1: caractères hors plages Unicode reconnues (seuil resserré)
   const allowed = /[a-zA-Z0-9\s.,!?;:()\-’"«»À-ɏЀ-ӿ؀-ۿऀ-ॿ一-鿿぀-ヿ가-힯’-‟…–—]/;
   let specialCount = 0;
   for (const ch of text) {
     if (!allowed.test(ch)) specialCount++;
   }
-  if (specialCount / text.length > 0.25) return true;
+  if (specialCount / text.length > 0.18) return true;
 
-  // Check 2: densité anormalement élevée de caractères Latin non-ASCII (U+0080–U+024F).
-  // Les PDFs avec polices personnalisées remappent les octets vers cette plage → ~50 % du texte.
-  // Du vrai texte français n’en contient que ~5–15 %.
+  // Check 2: densité élevée de Latin étendu U+0080–U+024F (polices PDF remappées)
   let nonAsciiLatinCount = 0;
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i);
     if (code > 127 && code < 0x0250) nonAsciiLatinCount++;
   }
-  if (nonAsciiLatinCount / text.length > 0.30) return true;
+  if (nonAsciiLatinCount / text.length > 0.22) return true;
+
+  // Check 3: signatures mojibake UTF-8 lu comme Latin-1 / Windows-1252
+  if (text.length >= 80) {
+    const mojibake = text.match(/\u00c3[\u00a0-\u00ff]|\u00c2[\u0080-\u00bf]/g);
+    if (mojibake && mojibake.length / text.length > 0.012) return true;
+  }
+
+  // Check 4: très peu d’espaces sur un long extrait (concaténation / binaire)
+  if (text.length >= 400) {
+    const ws = (text.match(/\s/g) || []).length;
+    if (ws / text.length < 0.045) return true;
+  }
+
+  // Check 5: ponctuation ASCII + chiffres anormalement denses (pas une prose normale)
+  if (text.length >= 120) {
+    let symdig = 0;
+    for (const ch of text) {
+      const c = ch.charCodeAt(0);
+      if ((c >= 33 && c <= 47) || (c >= 58 && c <= 64) || (c >= 91 && c <= 96) || (c >= 123 && c <= 126) || (c >= 48 && c <= 57)) {
+        symdig++;
+      }
+    }
+    if (symdig / text.length > 0.16) return true;
+  }
 
   return false;
 }
