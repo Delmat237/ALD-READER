@@ -61,7 +61,9 @@
       "router": {},
       "eas": {
         "projectId": "d8bc2ddf-eb8f-45a6-b135-b9fae54bac5f"
-      }
+      },
+      "mistralApiKey": "",
+      "googleApiKey": ""
     },
     "owner": "delmat237"
   }

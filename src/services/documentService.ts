@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import JSZip from 'jszip';
 import pako from 'pako';
 import { DocumentType, PlayerSettings } from '../types';
-import { extractTextFromScannedPdf } from './localOcrService';
+import { extractTextFromScannedPdf } from './ocrService';
 
 /**
  * Extracts readable text from a document.
@@ -32,7 +32,7 @@ async function extractTxt(uri: string): Promise<string[]> {
 const MAX_PDF_BYTES_FOR_EMBEDDED_PARSE = 1.5 * 1024 * 1024;
 
 async function extractPdf(uri: string, settings: PlayerSettings): Promise<string[]> {
-  const ocrFallback = () => extractTextFromScannedPdf(uri, settings.language);
+  const ocrFallback = () => extractTextFromScannedPdf(uri, settings.language, settings);
 
   try {
     const info = await FileSystem.getInfoAsync(uri);

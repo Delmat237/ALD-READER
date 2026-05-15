@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Modal, ScrollView, Pressable,
+  Modal, ScrollView, Pressable, TextInput,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { LANGUAGES, VoiceGender } from '../types';
@@ -17,6 +17,15 @@ export default function SettingsSheet({ visible, onClose }: Props) {
   const store = usePlayerStore();
   const { settings } = store;
   const colors = useAppTheme();
+  const [mistralDraft, setMistralDraft] = useState(settings.mistralApiKey ?? '');
+  const [googleDraft, setGoogleDraft] = useState(settings.googleApiKey ?? '');
+
+  React.useEffect(() => {
+    if (visible) {
+      setMistralDraft(settings.mistralApiKey ?? '');
+      setGoogleDraft(settings.googleApiKey ?? '');
+    }
+  }, [visible, settings.mistralApiKey, settings.googleApiKey]);
 
   return (
     <Modal
@@ -114,6 +123,36 @@ export default function SettingsSheet({ visible, onClose }: Props) {
               );
             })}
           </View>
+
+          {/* OCR cloud */}
+          <SectionLabel icon="☁️" label="OCR en ligne (optionnel)" colors={colors} />
+          <Text style={[styles.apiHint, { color: colors.white40 }]}>
+            Avec Internet : Mistral puis Google AI. Sinon OCR local (ML Kit).
+          </Text>
+          <Text style={[styles.apiFieldLabel, { color: colors.white60 }]}>Clé Mistral</Text>
+          <TextInput
+            style={[styles.apiInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+            value={mistralDraft}
+            onChangeText={setMistralDraft}
+            onBlur={() => store.setMistralApiKey(mistralDraft)}
+            placeholder="sk-…"
+            placeholderTextColor={colors.white20}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+          <Text style={[styles.apiFieldLabel, { color: colors.white60 }]}>Clé Google AI (Gemini)</Text>
+          <TextInput
+            style={[styles.apiInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
+            value={googleDraft}
+            onChangeText={setGoogleDraft}
+            onBlur={() => store.setGoogleApiKey(googleDraft)}
+            placeholder="AIza…"
+            placeholderTextColor={colors.white20}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
 
           {/* Speed */}
           <View style={styles.sliderSection}>
@@ -292,4 +331,14 @@ const styles = StyleSheet.create({
   },
   sliderEnd: { fontSize: 10 },
 
+  apiHint: { fontSize: 11, lineHeight: 16, marginBottom: 10 },
+  apiFieldLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4, marginTop: 4 },
+  apiInput: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    marginBottom: 8,
+  },
 });

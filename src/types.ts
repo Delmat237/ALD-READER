@@ -44,6 +44,10 @@ export interface PlayerSettings {
   pitch: number;       // 0.5–2.0
   volume: number;      // 0.0–1.0
   theme: 'light' | 'dark';
+  /** Clé API Mistral (optionnel, prioritaire pour l’OCR cloud). */
+  mistralApiKey?: string;
+  /** Clé API Google AI / Gemini (optionnel, repli OCR cloud). */
+  googleApiKey?: string;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -53,4 +57,6 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   pitch: 1.0,
   volume: 1.0,
   theme: 'dark',
+  mistralApiKey: '',
+  googleApiKey: '',
 };

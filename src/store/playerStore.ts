@@ -8,6 +8,31 @@ import { v4 as uuidv4 } from 'uuid';
 
 const LIBRARY_KEY = '@docuvoice_library';
 const SETTINGS_KEY = '@docuvoice_settings';
+/** Incrémenter pour invalider les caches texte après changement d’extraction. */
+const CONTENT_CACHE_VERSION = 2;
+
+function contentCacheKey(docId: string): string {
+  return `@docuvoice_content_v${CONTENT_CACHE_VERSION}_${docId}`;
+}
+
+function isCachedExtractionFailure(pages: string[]): boolean {
+  if (!pages.length) return true;
+  const joined = pages.join(' ');
+  return (
+    joined.includes("Ce PDF n'a pas pu être lu") ||
+    joined.includes('No content provider') ||
+    joined.includes('Impossible de lire ce PDF') ||
+    joined.includes('Impossible de convertir le PDF')
+  );
+}
+
+async function clearAllContentCaches(
+  library: DocuVoiceDocument[]
+): Promise<void> {
+  await Promise.all(
+    library.map((d) => AsyncStorage.removeItem(contentCacheKey(d.id)))
+  );
+}
 
 export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
@@ -43,6 +68,8 @@ interface PlayerStore {
   setSpeechRate: (rate: number) => Promise<void>;
   setPitch: (pitch: number) => Promise<void>;
   setTheme: (theme: 'light' | 'dark') => Promise<void>;
+  setMistralApiKey: (key: string) => Promise<void>;
+  setGoogleApiKey: (key: string) => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerStore>((set, get) => {
@@ -163,7 +190,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
       set({ library: updated });
       await AsyncStorage.setItem(LIBRARY_KEY, JSON.stringify(updated));
       // Nettoyer le cache du texte
-      await AsyncStorage.removeItem(`@docuvoice_content_${id}`);
+      await AsyncStorage.removeItem(contentCacheKey(id));
     },
 
     openDocument: async (doc: DocuVoiceDocument) => {
@@ -177,17 +204,22 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
 
       try {
         // 1. Tenter de charger depuis le cache local
-        const CACHE_KEY = `@docuvoice_content_${doc.id}`;
+        const CACHE_KEY = contentCacheKey(doc.id);
         const cachedContent = await AsyncStorage.getItem(CACHE_KEY);
-        
+
         let extracted: string[];
         if (cachedContent) {
           extracted = JSON.parse(cachedContent);
+          if (isCachedExtractionFailure(extracted)) {
+            await AsyncStorage.removeItem(CACHE_KEY);
+            extracted = await extractText(doc.uri, doc.type, get().settings);
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(extracted));
+          }
         } else {
-          // 2. Si pas de cache, faire l'extraction (peut appeler Mistral)
           extracted = await extractText(doc.uri, doc.type, get().settings);
-          // Sauvegarder dans le cache pour la prochaine fois
-          await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(extracted));
+          if (!isCachedExtractionFailure(extracted)) {
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(extracted));
+          }
         }
 
         const savedIdx = Math.round(doc.readingProgress * (extracted.length - 1));
@@ -311,6 +343,18 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
       const settings = { ...get().settings, theme };
       set({ settings });
       await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    },
+    setMistralApiKey: async (mistralApiKey: string) => {
+      const settings = { ...get().settings, mistralApiKey };
+      set({ settings });
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      await clearAllContentCaches(get().library);
+    },
+    setGoogleApiKey: async (googleApiKey: string) => {
+      const settings = { ...get().settings, googleApiKey };
+      set({ settings });
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      await clearAllContentCaches(get().library);
     },
   };
 });
