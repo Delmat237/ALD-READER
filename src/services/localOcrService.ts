@@ -1,7 +1,31 @@
 import TextRecognition, { TextRecognitionScript } from '@react-native-ml-kit/text-recognition';
 import { convert } from 'react-native-pdf-to-image';
+import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AppLanguage } from '../types';
+
+/**
+ * Sur Android, PdfToImageModule utilise ContentResolver.openFileDescriptor() :
+ * un chemin file:// brut (cache du picker) déclenche souvent « No content provider ».
+ * Expo expose le même fichier via content:// (FileProvider).
+ */
+async function pdfUriForNativeRenderer(uri: string): Promise<string> {
+  if (Platform.OS !== 'android') return uri;
+  if (uri.startsWith('content://')) return uri;
+
+  const fileUri = uri.startsWith('file://')
+    ? uri
+    : uri.startsWith('/')
+      ? `file://${uri}`
+      : uri;
+
+  try {
+    return await FileSystem.getContentUriAsync(fileUri);
+  } catch (e) {
+    console.warn('getContentUriAsync failed, tentative avec file:// :', e);
+    return fileUri;
+  }
+}
 
 // ML Kit supporte 5 scripts. Arabe et Cyrillique (ru) tombent en LATIN (best-effort).
 function scriptForLanguage(lang: AppLanguage): TextRecognitionScript {
@@ -25,7 +49,8 @@ export async function extractTextFromScannedPdf(
   // 1. Convertir chaque page du PDF en image PNG (API système Android/iOS)
   let outputFiles: string[] = [];
   try {
-    const result = await convert(uri);
+    const pdfUri = await pdfUriForNativeRenderer(uri);
+    const result = await convert(pdfUri);
     outputFiles = result.outputFiles ?? [];
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
