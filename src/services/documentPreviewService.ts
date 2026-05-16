@@ -6,7 +6,7 @@ import { pdfToPageImages, deleteTempImages } from './pdfImageService';
 const PREVIEW_ROOT = `${FileSystem.cacheDirectory}docuvoice_preview/`;
 
 function previewManifestKey(docId: string): string {
-  return `@docuvoice_preview_v1_${docId}`;
+  return `@docuvoice_preview_v2_${docId}`;
 }
 
 function normalizeFileUri(path: string): string {
@@ -46,7 +46,7 @@ export async function buildPdfPreviewImages(
   const cached = await loadCachedPreviewImages(docId);
   if (cached) return cached;
 
-  const tempImages = await pdfToPageImages(uri);
+  const tempImages = await pdfToPageImages(uri, 'preview');
   const dir = `${PREVIEW_ROOT}${docId}/`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
 

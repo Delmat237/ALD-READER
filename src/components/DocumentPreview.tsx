@@ -57,6 +57,8 @@ export default function DocumentPreview({
             style={styles.image}
             resizeMode="contain"
             accessibilityLabel={`Aperçu page ${pageNum}`}
+            // Évite le flou lors du redimensionnement sur écrans haute densité
+            resizeMethod="scale"
           />
         </View>
       ) : txtRaw !== null ? (

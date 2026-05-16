@@ -1,9 +1,21 @@
 import { convert, convertB64 } from 'react-native-pdf-to-image';
-import { Platform } from 'react-native';
+import { Dimensions, PixelRatio, Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 
 const MAX_PDF_BYTES_FOR_B64_CONVERT = 12 * 1024 * 1024;
-const RENDER_DPI = 150;
+
+/**
+ * Sur Android, convertB64 utilise le 2e argument comme largeur en PIXELS (pas un vrai DPI).
+ * 150 → image 150 px de large = flou à l’écran. On calcule une largeur adaptée à l’écran.
+ */
+export function getPdfRenderWidthPx(purpose: 'preview' | 'ocr' = 'ocr'): number {
+  const { width } = Dimensions.get('window');
+  const screenPx = Math.round(width * PixelRatio.get());
+  if (purpose === 'preview') {
+    return Math.min(Math.max(screenPx, 1200), 2560);
+  }
+  return Math.min(Math.max(Math.round(screenPx * 0.9), 1080), 2048);
+}
 
 function normalizeFileUri(uri: string): string {
   if (uri.startsWith('file://') || uri.startsWith('content://')) return uri;
@@ -25,7 +37,10 @@ async function pdfUriForContentResolver(fileUri: string): Promise<string> {
   return FileSystem.getContentUriAsync(fileUri);
 }
 
-async function convertPdfFileToImages(fileUri: string): Promise<string[]> {
+async function convertPdfFileToImages(
+  fileUri: string,
+  renderWidthPx: number
+): Promise<string[]> {
   const info = await FileSystem.getInfoAsync(fileUri);
   if (!info.exists) {
     throw new Error('Fichier PDF introuvable après copie dans le cache.');
@@ -38,7 +53,7 @@ async function convertPdfFileToImages(fileUri: string): Promise<string[]> {
 
   const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: 'base64' });
   // Typage npm incorrect (Promise<number>) — le natif renvoie { outputFiles: string[] }
-  const result = (await convertB64(base64, RENDER_DPI)) as unknown as {
+  const result = (await convertB64(base64, renderWidthPx)) as unknown as {
     outputFiles?: string[];
   };
   const outputFiles = result.outputFiles;
@@ -53,12 +68,17 @@ async function convertPdfFileToImages(fileUri: string): Promise<string[]> {
  * Android : convertB64 en priorité (évite « No content provider » sur file://).
  * iOS : convert(uri) puis repli convertB64.
  */
-export async function pdfToPageImages(uri: string): Promise<string[]> {
+export async function pdfToPageImages(
+  uri: string,
+  purpose: 'preview' | 'ocr' = 'ocr'
+): Promise<string[]> {
+  const renderWidthPx = getPdfRenderWidthPx(purpose);
   const cachedPdf = await ensurePdfInCache(uri);
   const fileUri = normalizeFileUri(cachedPdf);
 
-  if (Platform.OS === 'android') {
-    return convertPdfFileToImages(fileUri);
+  // Android : convertB64 uniquement. iOS aperçu : haute résolution via convertB64 aussi.
+  if (Platform.OS === 'android' || purpose === 'preview') {
+    return convertPdfFileToImages(fileUri, renderWidthPx);
   }
 
   try {
@@ -69,7 +89,7 @@ export async function pdfToPageImages(uri: string): Promise<string[]> {
     console.warn('pdfToPageImages: convert(uri) échoué, repli convertB64:', e);
   }
 
-  return convertPdfFileToImages(fileUri);
+  return convertPdfFileToImages(fileUri, renderWidthPx);
 }
 
 export async function deleteTempImages(paths: string[]): Promise<void> {

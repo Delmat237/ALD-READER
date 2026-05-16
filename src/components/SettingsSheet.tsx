@@ -4,8 +4,10 @@ import {
   Modal, ScrollView, Pressable, TextInput,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { LANGUAGES, VoiceGender } from '../types';
+import { LANGUAGES } from '../types';
 import { usePlayerStore } from '../store/playerStore';
+import { AUTO_VOICE_ID, formatVoiceLabel, getVoicesForLocale } from '../services/voiceService';
+import type { Voice } from 'expo-speech';
 import { Radius, Spacing, useAppTheme } from '../theme';
 
 interface Props {
@@ -19,6 +21,8 @@ export default function SettingsSheet({ visible, onClose }: Props) {
   const colors = useAppTheme();
   const [mistralDraft, setMistralDraft] = useState(settings.mistralApiKey ?? '');
   const [googleDraft, setGoogleDraft] = useState(settings.googleApiKey ?? '');
+  const [deviceVoices, setDeviceVoices] = useState<Voice[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(false);
 
   React.useEffect(() => {
     if (visible) {
@@ -26,6 +30,27 @@ export default function SettingsSheet({ visible, onClose }: Props) {
       setGoogleDraft(settings.googleApiKey ?? '');
     }
   }, [visible, settings.mistralApiKey, settings.googleApiKey]);
+
+  React.useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    setVoicesLoading(true);
+    getVoicesForLocale(settings.language.ttsLocale)
+      .then((list) => {
+        if (!cancelled) setDeviceVoices(list);
+      })
+      .catch(() => {
+        if (!cancelled) setDeviceVoices([]);
+      })
+      .finally(() => {
+        if (!cancelled) setVoicesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, settings.language.ttsLocale]);
+
+  const selectedVoiceId = settings.selectedVoiceId ?? AUTO_VOICE_ID;
 
   return (
     <Modal
@@ -93,36 +118,80 @@ export default function SettingsSheet({ visible, onClose }: Props) {
             })}
           </View>
 
-          {/* Voice gender */}
-          <SectionLabel icon="🎤" label="Type de voix" colors={colors} />
-          <View style={styles.voiceRow}>
-            {(['female', 'male', 'neutral'] as VoiceGender[]).map((g) => {
-              const meta = {
-                female: { label: 'Féminine', icon: '♀' },
-                male: { label: 'Masculine', icon: '♂' },
-                neutral: { label: 'Neutre', icon: '◎' },
-              }[g];
-              const active = settings.voiceGender === g;
-              return (
-                <TouchableOpacity
-                  key={g}
+          {/* Voix système */}
+          <SectionLabel icon="🎤" label="Voix de lecture" colors={colors} />
+          <Text style={[styles.voiceHint, { color: colors.white40 }]}>
+            Voix installées sur cet appareil pour {settings.language.label}
+          </Text>
+          {voicesLoading ? (
+            <Text style={[styles.voiceHint, { color: colors.white40 }]}>Chargement des voix…</Text>
+          ) : (
+            <ScrollView
+              style={styles.voiceListScroll}
+              contentContainerStyle={styles.voiceList}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              <TouchableOpacity
+                style={[
+                  styles.voiceListItem,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  selectedVoiceId === AUTO_VOICE_ID && {
+                    backgroundColor: colors.accentDim,
+                    borderColor: colors.accentBorder,
+                  },
+                ]}
+                onPress={() => store.setSelectedVoiceId(AUTO_VOICE_ID)}
+              >
+                <Text
                   style={[
-                    styles.voiceBtn,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
-                    active && { backgroundColor: colors.accentDim, borderColor: colors.accentBorder }
+                    styles.voiceListLabel,
+                    { color: colors.white60 },
+                    selectedVoiceId === AUTO_VOICE_ID && { color: colors.accentLight },
                   ]}
-                  onPress={() => store.setVoiceGender(g)}
                 >
-                  <Text style={[styles.voiceIcon, { color: colors.white40 }, active && { color: colors.accent }]}>
-                    {meta.icon}
-                  </Text>
-                  <Text style={[styles.voiceLabel, { color: colors.white40 }, active && { color: colors.accentLight }]}>
-                    {meta.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  Automatique (système)
+                </Text>
+              </TouchableOpacity>
+              {deviceVoices.length === 0 ? (
+                <Text style={[styles.voiceHint, { color: colors.white40 }]}>
+                  Aucune voix trouvée pour cette langue. Installez des voix dans les réglages Android/iOS.
+                </Text>
+              ) : (
+                deviceVoices.map((voice) => {
+                  const active = selectedVoiceId === voice.identifier;
+                  return (
+                    <TouchableOpacity
+                      key={voice.identifier}
+                      style={[
+                        styles.voiceListItem,
+                        { backgroundColor: colors.surface, borderColor: colors.border },
+                        active && {
+                          backgroundColor: colors.accentDim,
+                          borderColor: colors.accentBorder,
+                        },
+                      ]}
+                      onPress={() => store.setSelectedVoiceId(voice.identifier)}
+                    >
+                      <Text
+                        style={[
+                          styles.voiceListLabel,
+                          { color: colors.white60 },
+                          active && { color: colors.accentLight },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {formatVoiceLabel(voice)}
+                      </Text>
+                      <Text style={[styles.voiceListSub, { color: colors.white40 }]}>
+                        {voice.language}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          )}
 
           {/* OCR cloud */}
           <SectionLabel icon="☁️" label="OCR en ligne (optionnel)" colors={colors} />
@@ -298,17 +367,33 @@ const styles = StyleSheet.create({
   langFlag: { fontSize: 15 },
   langLabel: { fontSize: 12, fontWeight: '500' },
 
-  voiceRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.xl },
-  voiceBtn: {
-    flex: 1,
-    paddingVertical: 12,
+  voiceHint: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: Spacing.sm,
+  },
+  voiceListScroll: {
+    maxHeight: 220,
+    marginBottom: Spacing.xl,
+  },
+  voiceList: {
+    gap: 6,
+    paddingBottom: 4,
+  },
+  voiceListItem: {
     borderRadius: Radius.md,
     borderWidth: 1,
-    alignItems: 'center',
-    gap: 4,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
   },
-  voiceIcon: { fontSize: 16 },
-  voiceLabel: { fontSize: 11, fontWeight: '500' },
+  voiceListLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  voiceListSub: {
+    fontSize: 10,
+    marginTop: 2,
+  },
 
   sliderSection: { marginBottom: Spacing.md },
   sliderHeader: {

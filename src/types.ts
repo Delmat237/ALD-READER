@@ -35,11 +35,10 @@ export const LANGUAGES: AppLanguage[] = [
   { code: 'hi', label: 'हिन्दी', flag: '🇮🇳', ttsLocale: 'hi-IN' },
 ];
 
-export type VoiceGender = 'female' | 'male' | 'neutral';
-
 export interface PlayerSettings {
   language: AppLanguage;
-  voiceGender: VoiceGender;
+  /** Identifiant de voix système (expo-speech). Chaîne vide = voix automatique. */
+  selectedVoiceId: string;
   speechRate: number;  // 0.25–2.0
   pitch: number;       // 0.5–2.0
   volume: number;      // 0.0–1.0
@@ -52,7 +51,7 @@ export interface PlayerSettings {
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
   language: LANGUAGES[0],
-  voiceGender: 'female',
+  selectedVoiceId: '',
   speechRate: 0.9,
   pitch: 1.0,
   volume: 1.0,

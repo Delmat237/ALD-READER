@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DocuVoiceDocument, PlayerSettings, DEFAULT_SETTINGS, AppLanguage, VoiceGender } from '../types';
+import { DocuVoiceDocument, PlayerSettings, DEFAULT_SETTINGS, AppLanguage } from '../types';
+import { getVoicesForLocale } from '../services/voiceService';
 import { ttsService } from '../services/ttsService';
 import { extractText, typeFromExtension } from '../services/documentService';
 import {
@@ -73,7 +74,7 @@ interface PlayerStore {
   getProgress: () => number;
 
   setLanguage: (lang: AppLanguage) => Promise<void>;
-  setVoiceGender: (gender: VoiceGender) => Promise<void>;
+  setSelectedVoiceId: (voiceId: string) => Promise<void>;
   setSpeechRate: (rate: number) => Promise<void>;
   setPitch: (pitch: number) => Promise<void>;
   setTheme: (theme: 'light' | 'dark') => Promise<void>;
@@ -95,7 +96,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
         rate: settings.speechRate,
         pitch: settings.pitch,
         volume: settings.volume,
-        voiceGender: settings.voiceGender,
+        voiceId: settings.selectedVoiceId ?? '',
         onChunkStart: (idx) => set({ currentChunkIndex: idx }),
         onDone: () => {
           const { pages, currentPageIndex } = get();
@@ -154,9 +155,18 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
           AsyncStorage.getItem(SETTINGS_KEY),
         ]);
         const library = libRaw ? JSON.parse(libRaw) : [];
-        const settings = settingsRaw
-          ? { ...DEFAULT_SETTINGS, ...JSON.parse(settingsRaw) }
-          : DEFAULT_SETTINGS;
+        const parsed = settingsRaw ? JSON.parse(settingsRaw) : {};
+        const settings: PlayerSettings = {
+          ...DEFAULT_SETTINGS,
+          ...parsed,
+          language: parsed.language
+            ? { ...DEFAULT_SETTINGS.language, ...parsed.language }
+            : DEFAULT_SETTINGS.language,
+          selectedVoiceId:
+            typeof parsed.selectedVoiceId === 'string'
+              ? parsed.selectedVoiceId
+              : '',
+        };
         set({ library, settings });
       } catch (err) {
         console.error('Init error (AsyncStorage):', err);
@@ -367,12 +377,24 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
     },
 
     setLanguage: async (lang: AppLanguage) => {
-      const settings = { ...get().settings, language: lang };
+      let selectedVoiceId = get().settings.selectedVoiceId ?? '';
+      try {
+        const voices = await getVoicesForLocale(lang.ttsLocale);
+        if (
+          selectedVoiceId &&
+          !voices.some((v) => v.identifier === selectedVoiceId)
+        ) {
+          selectedVoiceId = '';
+        }
+      } catch {
+        /* garde la sélection actuelle */
+      }
+      const settings = { ...get().settings, language: lang, selectedVoiceId };
       set({ settings });
       await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     },
-    setVoiceGender: async (gender: VoiceGender) => {
-      const settings = { ...get().settings, voiceGender: gender };
+    setSelectedVoiceId: async (selectedVoiceId: string) => {
+      const settings = { ...get().settings, selectedVoiceId };
       set({ settings });
       await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     },

@@ -8,7 +8,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:android": "eas build --platform android",
-    "build:ios": "eas build --platform ios"
+    "build:ios": "eas build --platform ios",
+    "deploy": "bash scripts/deploy.sh ota preview",
+    "deploy:ota": "bash scripts/deploy.sh ota preview",
+    "deploy:ota:prod": "bash scripts/deploy.sh ota production",
+    "deploy:android": "bash scripts/deploy.sh build-android preview",
+    "deploy:android:prod": "bash scripts/deploy.sh build-android production"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
