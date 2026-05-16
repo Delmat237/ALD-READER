@@ -3,6 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DocuVoiceDocument, PlayerSettings, DEFAULT_SETTINGS, AppLanguage, VoiceGender } from '../types';
 import { ttsService } from '../services/ttsService';
 import { extractText, typeFromExtension } from '../services/documentService';
+import {
+  loadDocumentPreview,
+  clearDocumentPreviewCache,
+} from '../services/documentPreviewService';
 import * as DocumentPicker from 'expo-document-picker';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -41,6 +45,11 @@ interface PlayerStore {
   library: DocuVoiceDocument[];
   currentDoc: DocuVoiceDocument | null;
   pages: string[];
+  /** URIs des images d’aperçu (PDF), une par page physique. */
+  previewImageUris: string[];
+  /** Contenu brut TXT pour aperçu sans extraction. */
+  previewTxtRaw: string | null;
+  previewLoading: boolean;
   currentPageIndex: number;
   currentChunkIndex: number;
   status: PlayerStatus;
@@ -128,6 +137,9 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
     library: [],
     currentDoc: null,
     pages: [],
+    previewImageUris: [],
+    previewTxtRaw: null,
+    previewLoading: false,
     currentPageIndex: 0,
     currentChunkIndex: 0,
     status: 'idle',
@@ -184,8 +196,16 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
       const { currentDoc, library } = get();
       if (currentDoc?.id === id) {
         await get().stop();
-        set({ currentDoc: null, pages: [], currentPageIndex: 0 });
+        set({
+          currentDoc: null,
+          pages: [],
+          previewImageUris: [],
+          previewTxtRaw: null,
+          previewLoading: false,
+          currentPageIndex: 0,
+        });
       }
+      await clearDocumentPreviewCache(id);
       const updated = library.filter((d) => d.id !== id);
       set({ library: updated });
       await AsyncStorage.setItem(LIBRARY_KEY, JSON.stringify(updated));
@@ -200,7 +220,34 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
         return;
       }
       await get().stop();
-      set({ status: 'loading', currentDoc: doc, errorMessage: null, pages: [] });
+      set({
+        status: 'loading',
+        currentDoc: doc,
+        errorMessage: null,
+        pages: [],
+        previewImageUris: [],
+        previewTxtRaw: null,
+        previewLoading: doc.type === 'pdf' || doc.type === 'txt',
+      });
+
+      const docId = doc.id;
+      const docUri = doc.uri;
+      const docType = doc.type;
+      loadDocumentPreview(docUri, docId, docType)
+        .then((preview) => {
+          if (get().currentDoc?.id !== docId) return;
+          set({
+            previewImageUris: preview.imageUris,
+            previewTxtRaw: preview.txtRaw,
+            previewLoading: false,
+          });
+        })
+        .catch((err) => {
+          console.warn('Aperçu document:', err);
+          if (get().currentDoc?.id === docId) {
+            set({ previewLoading: false });
+          }
+        });
 
       try {
         // 1. Tenter de charger depuis le cache local

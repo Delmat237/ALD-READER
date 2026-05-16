@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePlayerStore } from '../../src/store/playerStore';
 import AudioPlayer from '../../src/components/AudioPlayer';
+import DocumentPreview from '../../src/components/DocumentPreview';
 import SettingsSheet from '../../src/components/SettingsSheet';
 import { Radius, Spacing, useAppTheme } from '../../src/theme';
 import { splitIntoSpeechChunks } from '../../src/utils/text';
@@ -100,6 +101,26 @@ export default function ReaderScreen() {
       <View style={styles.playerArea}>
         <AudioPlayer />
       </View>
+
+      <DocumentPreview
+        imageUri={
+          store.previewImageUris.length > 0
+            ? store.previewImageUris[
+                Math.min(store.currentPageIndex, store.previewImageUris.length - 1)
+              ] ?? null
+            : null
+        }
+        txtRaw={store.previewTxtRaw}
+        pageNum={store.currentPageIndex + 1}
+        totalPages={
+          store.previewImageUris.length > 0
+            ? store.previewImageUris.length
+            : store.pages.length
+        }
+        docType={store.currentDoc.type}
+        loading={store.previewLoading}
+        colors={colors}
+      />
 
       {/* Page divider label */}
       <View style={styles.pagerHeader}>
