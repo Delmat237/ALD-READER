@@ -39,6 +39,15 @@ export default function ReaderScreen() {
     }
   }, [store.currentPageIndex, store.pages.length]);
 
+  const currentChunkText = useMemo(() => {
+    const page = store.pages[store.currentPageIndex];
+    if (!page) return null;
+    const chunks = splitIntoSpeechChunks(page);
+    if (!chunks.length) return null;
+    const idx = Math.min(store.currentChunkIndex, chunks.length - 1);
+    return chunks[idx] ?? null;
+  }, [store.pages, store.currentPageIndex, store.currentChunkIndex]);
+
   const renderItem = useCallback(({ item, index }: any) => (
     <MemoPageCard
       text={item}
@@ -119,6 +128,8 @@ export default function ReaderScreen() {
         }
         docType={store.currentDoc.type}
         loading={store.previewLoading}
+        currentChunkText={currentChunkText}
+        language={store.settings.language}
         colors={colors}
       />
 

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DocuVoiceDocument, PlayerSettings, DEFAULT_SETTINGS, AppLanguage } from '../types';
 import { getVoicesForLocale } from '../services/voiceService';
+import { clearPreviewLayoutCache } from '../services/previewHighlightService';
 import { ttsService } from '../services/ttsService';
 import { extractText, typeFromExtension } from '../services/documentService';
 import {
@@ -216,6 +217,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
         });
       }
       await clearDocumentPreviewCache(id);
+      clearPreviewLayoutCache();
       const updated = library.filter((d) => d.id !== id);
       set({ library: updated });
       await AsyncStorage.setItem(LIBRARY_KEY, JSON.stringify(updated));
@@ -230,6 +232,7 @@ export const usePlayerStore = create<PlayerStore>((set, get) => {
         return;
       }
       await get().stop();
+      clearPreviewLayoutCache();
       set({
         status: 'loading',
         currentDoc: doc,
