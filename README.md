@@ -1,80 +1,63 @@
-# 🎧 ALD-Reader
+# ALD-Reader
 
-**ALD-Reader** est une application mobile moderne conçue avec Expo et React Native, permettant de transformer vos documents (PDF, EPUB, TXT) en livres audio personnalisés. Grâce à une extraction de texte intelligente et une synthèse vocale (TTS) de haute qualité, ALD-Reader offre une expérience de lecture immersive et accessible.
+**ALD-Reader** transforme vos documents (**PDF**, **EPUB**, **TXT**) en lecture audio : extraction de texte intelligente, synthèse vocale multilingue, aperçu visuel des pages et surlignage de la phrase en cours.
 
----
-
-## ✨ Fonctionnalités Clés
-
-- 📄 **Support Multi-format** : Importez et lisez des fichiers PDF, EPUB et TXT en un clin d'œil.
-- 🗣️ **Synthèse Vocale Avancée** : Support de 12 langues avec réglage de la vitesse, de la tonalité et du genre de la voix.
-- 🖍️ **Surlignage Dynamique** : Suivez votre lecture visuellement grâce au surlignage des phrases en temps réel (Karaoke-style).
-- 🌓 **Interface Premium** : Design moderne, épuré et réactif, optimisé pour une utilisation fluide.
-- 💾 **Sauvegarde Automatique** : Reprenez votre lecture exactement là où vous vous étiez arrêté pour chaque document.
-- 🌐 **Lecture Hors-ligne** : Une fois importés, vos documents sont traitables sans connexion internet.
+> Documentation complète : **[docs/DOCUMENTATION.md](./docs/DOCUMENTATION.md)** (architecture, OCR, déploiement, dépannage).
 
 ---
 
-## 🛠️ Stack Technique
+## Fonctionnalités
 
-- **Framework** : [Expo SDK 54](https://expo.dev/) / React Native 0.81
-- **Langage** : TypeScript
-- **Navigation** : Expo Router v6
-- **Gestion d'État** : Zustand
-- **Traitement de Documents** : JSZip (EPUB), Custom Regex Parser (PDF)
-- **Synthèse Vocale** : Expo Speech
-- **Persistance** : AsyncStorage
-
----
-
-## 🚀 Installation & Lancement
-
-### Prérequis
-- Node.js (v18+)
-- npm ou yarn
-- Application **Expo Go** installée sur votre smartphone (disponible sur iOS et Android)
-
-### Étapes
-1. **Cloner le projet** :
-   ```bash
-   git clone <url-du-repo>
-   cd docuvoice-expo
-   ```
-
-2. **Installer les dépendances** :
-   ```bash
-   npm install --legacy-peer-deps
-   ```
-
-3. **Lancer le serveur de développement** :
-   ```bash
-   npx expo start
-   ```
-
-4. **Scanner le QR Code** :
-   Ouvrez l'application Expo Go sur votre téléphone et scannez le QR code affiché dans votre terminal.
+- Import PDF / EPUB / TXT depuis l'appareil
+- **12 langues** TTS avec choix de la **voix système**
+- PDF : texte embarqué si possible, sinon **OCR** (ML Kit local ou Mistral / Gemini en ligne)
+- **Aperçu** des pages PDF et surlignage de la lecture
+- Progression et texte extrait **mis en cache** hors ligne
+- Thème clair / sombre
 
 ---
 
-## 📖 Utilisation
+## Prérequis
 
-1. **Importer** : Appuyez sur le bouton **+** en bas à droite pour sélectionner un document sur votre téléphone.
-2. **Lire** : Cliquez sur un document dans votre bibliothèque pour lancer la lecture.
-3. **Personnaliser** : Utilisez l'icône **⚙️ (Paramètres)** en haut à droite pour changer la langue, la voix ou la vitesse de lecture.
-4. **Suivre** : Observez le surlignage du texte dans la zone "Contenu du document" pendant que l'app lit pour vous.
+- Node.js 18+
+- Build **native** (EAS ou `expo run:android` / `ios`) — pas Expo Go seul (ML Kit, conversion PDF)
 
 ---
 
-## 🤝 Contribution
+## Démarrage rapide
 
-Les contributions sont les bienvenues ! Pour des changements majeurs, veuillez ouvrir une issue pour discuter de ce que vous aimeriez changer.
+```bash
+npm install
+npx expo start
+# avec modules natifs :
+npx expo run:android
+```
 
 ---
 
-## 📄 Licence
+## Déploiement
 
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
+```bash
+npm run deploy              # OTA (canal preview)
+npm run deploy:android      # Build APK preview
+./scripts/deploy.sh --help  # Toutes les commandes
+```
+
+Détails : [section Déploiement](./docs/DOCUMENTATION.md#12-déploiement-eas) dans la doc complète.
+
+| Ressource | URL |
+|-----------|-----|
+| Builds EAS | https://expo.dev/accounts/delmat237/projects/docuvoice/builds |
+| Updates OTA | https://expo.dev/accounts/delmat237/projects/docuvoice/updates |
 
 ---
 
-*Développé avec ❤️ pour une accessibilité numérique accrue.*
+## Stack
+
+Expo SDK 54 · React Native 0.81 · TypeScript · Expo Router · Zustand · expo-speech · ML Kit · react-native-pdf-to-image
+
+---
+
+## Licence
+
+MIT — voir `LICENSE` si présent.
