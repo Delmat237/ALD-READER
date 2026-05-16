@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 const LIBRARY_KEY = '@docuvoice_library';
 const SETTINGS_KEY = '@docuvoice_settings';
 /** Incrémenter pour invalider les caches texte après changement d’extraction. */
-const CONTENT_CACHE_VERSION = 2;
+const CONTENT_CACHE_VERSION = 3;
 
 function contentCacheKey(docId: string): string {
   return `@docuvoice_content_v${CONTENT_CACHE_VERSION}_${docId}`;

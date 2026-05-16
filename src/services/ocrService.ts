@@ -1,10 +1,34 @@
 import TextRecognition, { TextRecognitionScript } from '@react-native-ml-kit/text-recognition';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import type { AppLanguage } from '../types';
 import type { PlayerSettings } from '../types';
 import { resolveApiKeys, hasCloudOcrKeys } from '../config/apiKeys';
 import { isDeviceOnline } from './networkService';
 import { pdfToPageImages, deleteTempImages } from './pdfImageService';
 import { cloudOcrFromImages } from './cloudOcrService';
+
+/**
+ * ML Kit Android utilise InputImage.fromFilePath : un chemin sans schéma
+ * (/data/.../xxx.png) provoque « No content provider ». iOS attend une URL file://.
+ */
+async function imageUriForMlKit(imagePath: string): Promise<string> {
+  const fileUri =
+    imagePath.startsWith('file://') || imagePath.startsWith('content://')
+      ? imagePath
+      : imagePath.startsWith('/')
+        ? `file://${imagePath}`
+        : imagePath;
+
+  if (Platform.OS === 'android' && fileUri.startsWith('file://')) {
+    try {
+      return await FileSystem.getContentUriAsync(fileUri);
+    } catch {
+      return fileUri;
+    }
+  }
+  return fileUri;
+}
 
 function scriptForLanguage(lang: AppLanguage): TextRecognitionScript {
   switch (lang.code) {
@@ -28,7 +52,8 @@ async function localOcrFromImages(
   const script = scriptForLanguage(language);
   const pages: string[] = [];
   for (const imagePath of imagePaths) {
-    const result = await TextRecognition.recognize(imagePath, script);
+    const uri = await imageUriForMlKit(imagePath);
+    const result = await TextRecognition.recognize(uri, script);
     const text = result.text.trim();
     if (text.length > 0) pages.push(text);
   }
@@ -83,7 +108,8 @@ export async function extractTextFromScannedPdf(
     console.error('extractTextFromScannedPdf:', e);
     throw new Error(
       `Impossible de lire ce PDF (${m}). ` +
-        'Réimportez le fichier ou configurez une clé Mistral / Google dans les paramètres.'
+        'Réimportez le fichier. Si le message parle de « content provider », mettez à jour l’app (OTA). ' +
+        'Pour l’OCR en ligne : Internet + clé Mistral ou Google dans Paramètres.'
     );
   } finally {
     if (imagePaths.length) await deleteTempImages(imagePaths);
