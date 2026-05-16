@@ -29,6 +29,10 @@ type Props = {
   currentChunkText: string | null;
   language: AppLanguage;
   colors: ReturnType<typeof import('../theme').useAppTheme>;
+  /** Occupe toute la hauteur de l’onglet (lecteur). */
+  fill?: boolean;
+  /** Masque le libellé « APERÇU » (déjà fourni par les onglets). */
+  showLabel?: boolean;
 };
 
 export default function DocumentPreview({
@@ -41,9 +45,13 @@ export default function DocumentPreview({
   currentChunkText,
   language,
   colors,
+  fill = false,
+  showLabel = true,
 }: Props) {
-  const { width } = useWindowDimensions();
-  const previewHeight = Math.min(width * 1.35, 420);
+  const { width, height: windowH } = useWindowDimensions();
+  const previewHeight = fill
+    ? Math.max(200, windowH * 0.45)
+    : Math.min(width * 1.35, 420);
 
   const [layoutLoading, setLayoutLoading] = useState(false);
   const [layoutLines, setLayoutLines] = useState<Awaited<ReturnType<typeof getPreviewLineLayout>>>([]);
@@ -106,27 +114,51 @@ export default function DocumentPreview({
   };
 
   return (
-    <View style={[styles.wrap, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-      <View style={styles.labelRow}>
-        <Text style={[styles.label, { color: colors.white40 }]}>APERÇU</Text>
-        <Text style={[styles.pageHint, { color: colors.white40 }]}>
-          {docType === 'pdf' && totalPages > 0
-            ? `Page ${pageNum} / ${totalPages}`
-            : docType === 'txt'
-              ? 'Fichier original'
-              : 'Document'}
-        </Text>
-      </View>
+    <View
+      style={[
+        styles.wrap,
+        fill && styles.wrapFill,
+        { borderColor: colors.border, backgroundColor: colors.surface },
+      ]}
+    >
+      {showLabel ? (
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: colors.white40 }]}>APERÇU</Text>
+          <Text style={[styles.pageHint, { color: colors.white40 }]}>
+            {docType === 'pdf' && totalPages > 0
+              ? `Page ${pageNum} / ${totalPages}`
+              : docType === 'txt'
+                ? 'Fichier original'
+                : 'Document'}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.labelRow}>
+          <Text style={[styles.pageHint, { color: colors.white40 }]}>
+            {docType === 'pdf' && totalPages > 0
+              ? `Page ${pageNum} / ${totalPages}`
+              : docType === 'txt'
+                ? 'Fichier original'
+                : docType === 'epub'
+                  ? 'EPUB'
+                  : 'Document'}
+          </Text>
+        </View>
+      )}
 
       {loading ? (
-        <View style={[styles.placeholder, { height: previewHeight }]}>
+        <View style={[styles.placeholder, fill ? styles.placeholderFill : null, { height: fill ? undefined : previewHeight }]}>
           <ActivityIndicator color={colors.accent} />
           <Text style={[styles.hint, { color: colors.white40 }]}>Génération de l’aperçu…</Text>
         </View>
       ) : imageUri ? (
         <>
           <View
-            style={[styles.imageFrame, { height: previewHeight, backgroundColor: colors.bg }]}
+            style={[
+              styles.imageFrame,
+              fill ? styles.imageFrameFill : { height: previewHeight },
+              { backgroundColor: colors.bg },
+            ]}
             onLayout={onBoxLayout}
           >
             <Image
@@ -169,9 +201,9 @@ export default function DocumentPreview({
         </>
       ) : txtRaw !== null ? (
         <ScrollView
-          style={[styles.txtScroll, { maxHeight: previewHeight }]}
+          style={[styles.txtScroll, fill ? styles.txtScrollFill : { maxHeight: previewHeight }]}
+          contentContainerStyle={fill ? styles.txtScrollContentFill : undefined}
           showsVerticalScrollIndicator
-          nestedScrollEnabled
         >
           {txtChunks.map((chunk, idx) => (
             <Text
@@ -211,6 +243,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
     padding: Spacing.md,
+  },
+  wrapFill: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  placeholderFill: {
+    flex: 1,
+    minHeight: 200,
+  },
+  imageFrameFill: {
+    flex: 1,
+    minHeight: 200,
+  },
+  txtScrollFill: {
+    flex: 1,
+  },
+  txtScrollContentFill: {
+    paddingBottom: Spacing.lg,
   },
   labelRow: {
     flexDirection: 'row',

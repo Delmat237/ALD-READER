@@ -19,10 +19,15 @@ export default function ReaderScreen() {
   const store = usePlayerStore();
   const insets = useSafeAreaInsets();
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [contentTab, setContentTab] = useState<'preview' | 'text'>('text');
   const flatListRef = React.useRef<FlatList>(null);
   const colors = useAppTheme();
   const theme = store.settings.theme;
   const { width: screenW } = useWindowDimensions();
+
+  useEffect(() => {
+    setContentTab('text');
+  }, [store.currentDoc?.id]);
 
   // Safe scroll to index
   useEffect(() => {
@@ -47,6 +52,13 @@ export default function ReaderScreen() {
     const idx = Math.min(store.currentChunkIndex, chunks.length - 1);
     return chunks[idx] ?? null;
   }, [store.pages, store.currentPageIndex, store.currentChunkIndex]);
+
+  const showContentTabs =
+    store.currentDoc?.type === 'pdf' ||
+    store.currentDoc?.type === 'txt' ||
+    store.previewLoading ||
+    store.previewImageUris.length > 0 ||
+    store.previewTxtRaw !== null;
 
   const renderItem = useCallback(({ item, index }: any) => (
     <MemoPageCard
@@ -111,64 +123,113 @@ export default function ReaderScreen() {
         <AudioPlayer />
       </View>
 
-      <DocumentPreview
-        imageUri={
-          store.previewImageUris.length > 0
-            ? store.previewImageUris[
-                Math.min(store.currentPageIndex, store.previewImageUris.length - 1)
-              ] ?? null
-            : null
-        }
-        txtRaw={store.previewTxtRaw}
-        pageNum={store.currentPageIndex + 1}
-        totalPages={
-          store.previewImageUris.length > 0
-            ? store.previewImageUris.length
-            : store.pages.length
-        }
-        docType={store.currentDoc.type}
-        loading={store.previewLoading}
-        currentChunkText={currentChunkText}
-        language={store.settings.language}
-        colors={colors}
-      />
+      <View style={styles.contentArea}>
+        {showContentTabs ? (
+          <View style={[styles.tabBar, { borderBottomColor: colors.separator }]}>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                contentTab === 'preview' && [
+                  styles.tabActive,
+                  { backgroundColor: colors.accentDim, borderColor: colors.accentBorder },
+                ],
+              ]}
+              onPress={() => setContentTab('preview')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: contentTab === 'preview' }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: colors.white40 },
+                  contentTab === 'preview' && { color: colors.accentLight, fontWeight: '600' },
+                ]}
+              >
+                Aperçu
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                contentTab === 'text' && [
+                  styles.tabActive,
+                  { backgroundColor: colors.accentDim, borderColor: colors.accentBorder },
+                ],
+              ]}
+              onPress={() => setContentTab('text')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: contentTab === 'text' }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  { color: colors.white40 },
+                  contentTab === 'text' && { color: colors.accentLight, fontWeight: '600' },
+                ]}
+              >
+                Texte
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
-      {/* Page divider label */}
-      <View style={styles.pagerHeader}>
-        <Text style={[styles.pagerLabel, { color: colors.white40 }]}>TEXTE</Text>
-        <View style={[styles.pagerSeparator, { backgroundColor: colors.separator }]} />
+        {showContentTabs && contentTab === 'preview' ? (
+          <DocumentPreview
+            fill
+            showLabel={false}
+            imageUri={
+              store.previewImageUris.length > 0
+                ? store.previewImageUris[
+                    Math.min(store.currentPageIndex, store.previewImageUris.length - 1)
+                  ] ?? null
+                : null
+            }
+            txtRaw={store.previewTxtRaw}
+            pageNum={store.currentPageIndex + 1}
+            totalPages={
+              store.previewImageUris.length > 0
+                ? store.previewImageUris.length
+                : store.pages.length
+            }
+            docType={store.currentDoc.type}
+            loading={store.previewLoading}
+            currentChunkText={currentChunkText}
+            language={store.settings.language}
+            colors={colors}
+          />
+        ) : (
+          <FlatList
+            ref={flatListRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            data={store.pages}
+            keyExtractor={(_, i) => i.toString()}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(
+                e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width
+              );
+              if (idx >= 0 && idx < store.pages.length && idx !== store.currentPageIndex) {
+                store.seekToProgress(idx / (store.pages.length - 1 || 1));
+              }
+            }}
+            initialScrollIndex={
+              store.currentPageIndex >= store.pages.length ? 0 : store.currentPageIndex
+            }
+            getItemLayout={(_, index) => ({
+              length: screenW,
+              offset: screenW * index,
+              index,
+            })}
+            windowSize={3}
+            maxToRenderPerBatch={2}
+            updateCellsBatchingPeriod={50}
+            removeClippedSubviews={true}
+            style={styles.pager}
+            renderItem={renderItem}
+          />
+        )}
       </View>
-
-      {/* Horizontal pager */}
-      <FlatList
-        ref={flatListRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        data={store.pages}
-        keyExtractor={(_, i) => i.toString()}
-        onMomentumScrollEnd={(e) => {
-          const idx = Math.round(
-            e.nativeEvent.contentOffset.x / e.nativeEvent.layoutMeasurement.width
-          );
-          if (idx >= 0 && idx < store.pages.length && idx !== store.currentPageIndex) {
-            store.seekToProgress(idx / (store.pages.length - 1 || 1));
-          }
-        }}
-        initialScrollIndex={store.currentPageIndex >= store.pages.length ? 0 : store.currentPageIndex}
-        getItemLayout={(_, index) => ({
-          length: screenW,
-          offset: screenW * index,
-          index,
-        })}
-        // Performance optimizations
-        windowSize={3}
-        maxToRenderPerBatch={2}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={true}
-        style={styles.pager}
-        renderItem={renderItem}
-      />
 
       <SettingsSheet
         visible={settingsVisible}
@@ -315,22 +376,31 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.lg,
   },
 
-  // Pager header
-  pagerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.xl,
-    marginBottom: 8,
-    gap: 10,
-  },
-  pagerLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-  },
-  pagerSeparator: {
+  contentArea: {
     flex: 1,
-    height: 1,
+    minHeight: 0,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    gap: 8,
+    borderBottomWidth: 0,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  tabActive: {
+    borderWidth: 1,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 
   pager: { flex: 1 },
